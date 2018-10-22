@@ -19,6 +19,7 @@
 #![allow(unused_imports)]
 
 use std::collections::BTreeMap;
+use std::fmt::{self, Debug, Formatter};
 use std::sync::{Arc, Weak};
 
 use block::ExecutedBlock;
@@ -35,6 +36,8 @@ use parking_lot::RwLock;
 use ethereum_types::{H256, H520, Address, U128, U256};
 use rlp::{self, Decodable, DecoderError, Encodable, RlpStream, Rlp};
 
+use super::default_system_or_code_call;
+use super::block_reward::{apply_block_rewards, BlockRewardContract, RewardKind};
 use super::validator_set::{new_validator_set, SimpleList, ValidatorSet};
 
 // The maximum number of epochs for whom we will store the validator set.
@@ -63,21 +66,45 @@ fn is_validator_set_constant(validator_spec: &ValidatorSpec) -> bool {
 pub struct HbbftParams {
     /// Whether to use millisecond timestamp
     pub millisecond_timestamp: bool,
-    pub validators: Box<ValidatorSet>,
-    pub validator_set_is_constant: bool,
+    validators: Box<ValidatorSet>,
+    validator_set_is_constant: bool,
+    block_reward: U256,
+    block_reward_contract: Option<BlockRewardContract>,
 }
 
 impl From<ethjson::spec::HbbftParams> for HbbftParams {
     fn from(p: ethjson::spec::HbbftParams) -> Self {
         let validator_set_is_constant = is_validator_set_constant(&p.validators);
+        let block_reward: U256 = match p.block_reward {
+            Some(block_reward) => block_reward.into(),
+            None => 0.into(),
+        };
+        let block_reward_contract = p.block_reward_contract_address
+            .map(|addr| {
+                let addr = Address::from(addr);
+                BlockRewardContract::new_from_address(addr)
+            });
         HbbftParams {
             millisecond_timestamp: p.millisecond_timestamp,
             validators: new_validator_set(p.validators),
             validator_set_is_constant,
+            block_reward,
+            block_reward_contract,
         }
     }
 }
 
+impl Debug for HbbftParams {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.debug_struct("HbbftParams")
+            .field("millisecond_timestamp", &self.millisecond_timestamp)
+            .field("validators", &"<Box<ValidatorSet>>")
+            .field("validator_set_is_constant", &self.validator_set_is_constant)
+            .field("block_reward", &self.block_reward)
+            .field("block_reward_contract", &self.block_reward_contract)
+            .finish()
+    }
+}
 
 /// Stores the validator set for `MAX_VALIDATOR_CACHE_SIZE` number of epochs.
 #[derive(Default)]
@@ -114,6 +141,8 @@ pub struct Hbbft {
     validators: Box<ValidatorSet>,
     validator_set_is_constant: bool,
     validator_set_cache: ValidatorCache,
+    block_reward: U256,
+    block_reward_contract: Option<BlockRewardContract>,
 }
 
 impl Hbbft {
@@ -127,6 +156,8 @@ impl Hbbft {
             validators: params.validators,
             validator_set_is_constant: params.validator_set_is_constant,
             validator_set_cache: ValidatorCache::new(),
+            block_reward: params.block_reward,
+            block_reward_contract: params.block_reward_contract,
         }
     }
 }
@@ -209,6 +240,24 @@ impl Engine<EthereumMachine> for Hbbft {
                 .map_err(|e| format!("{}", e))
         };
         self.validators.on_epoch_begin(is_genesis_block, &header, &mut call_finalize_change)
+    }
+
+    // Called by `OpenBlock::close_and_lock()`.
+    fn on_close_block(&self, block: &mut ExecutedBlock) -> Result<(), Error> {
+        let author = *block.header.author();
+        let rewards: Vec<(Address, RewardKind, U256)> = match self.block_reward_contract {
+            Some(ref block_reward_contract) => {
+                let beneficiaries = [(author, RewardKind::Author)];
+                let mut call = default_system_or_code_call(&self.machine, block);
+                block_reward_contract
+                    .reward(&beneficiaries, &mut call)?
+                    .into_iter()
+                    .map(|(author, amount)| (author, RewardKind::External, amount))
+                    .collect()
+            },
+            None => vec![(author, RewardKind::Author, self.block_reward)]
+        };
+        apply_block_rewards(&rewards, block, &self.machine)
     }
 
 	fn open_block_header_timestamp(&self, parent_timestamp: u64) -> u64 {

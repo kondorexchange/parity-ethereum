@@ -17,6 +17,8 @@
 //! Honey Badger BFT engine params deserialization.
 
 use super::ValidatorSet;
+use hash::Address;
+use uint::Uint;
 
 /// Honey Badger BFT engine params deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
@@ -26,6 +28,10 @@ pub struct HbbftParams {
     #[serde(default)]
     pub millisecond_timestamp: bool,
     pub validators: ValidatorSet,
+    #[serde(rename="blockReward")]
+    pub block_reward: Option<Uint>,
+    #[serde(rename="blockRewardContractTransition")]
+    pub block_reward_contract_address: Option<Address>,
 }
 
 /// Honey Badger BFT engine descriptor.
