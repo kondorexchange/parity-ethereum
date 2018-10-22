@@ -16,13 +16,16 @@
 
 //! Honey Badger BFT engine params deserialization.
 
+use super::ValidatorSet;
+
 /// Honey Badger BFT engine params deserialization.
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct HbbftParams {
-	/// Whether to enable millisecond timestamp.
-	#[serde(rename="millisecondTimestamp")]
-	#[serde(default)]
-	pub millisecond_timestamp: bool,
+    /// Whether to enable millisecond timestamp.
+    #[serde(rename="millisecondTimestamp")]
+    #[serde(default)]
+    pub millisecond_timestamp: bool,
+    pub validators: ValidatorSet,
 }
 
 /// Honey Badger BFT engine descriptor.

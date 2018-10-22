@@ -8,19 +8,15 @@
 				"blockReward": "0xDE0B6B3A7640000",
 				"maximumUncleCountTransition": 0,
 				"maximumUncleCount": 0,
-				"validators": {
-					"multi": {
-						"0": {
-							"list": [
-				                "0x00bd138abd70e2f00903268f3db08f2d25677c9e",
-				                "0x00aa39d30f0d20ff03a22ccfc30b7efbfca597c2",
-				                "0x002e28950558fbede1a9675cb113f0bd20912019"
-				            ]
-						}
-					}
-				}
-			}
-		}
+                "validators": {
+                    "list": [
+                        "0x00bd138abd70e2f00903268f3db08f2d25677c9e",
+                        "0x00aa39d30f0d20ff03a22ccfc30b7efbfca597c2",
+                        "0x002e28950558fbede1a9675cb113f0bd20912019"
+                    ]
+                }
+            }
+        }
 	},
     "genesis": {
 		"seal": {
